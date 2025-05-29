@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Locked and Rocked and Rolled</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f5f5f5; margin: 0; display: flex; }
+    #main-container { flex: 1; text-align: center; padding: 20px; }
+    h1 { margin-top: 20px; }
+    #dice-container { display: flex; justify-content: center; margin: 20px; flex-wrap: wrap; }
+    .die {
+      width: 60px;
+      height: 60px;
+      margin: 10px;
+      font-size: 24px;
+      line-height: 60px;
+      background: white;
+      border: 2px solid #333;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: transform 0.3s ease;
+      box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+    }
+    .die:hover { transform: rotate(5deg) scale(1.05); }
+    .selected { background: #ff0; color: black; }
+    .locked { background: #f66; color: white; }
+    .scored { background: #6f6; color: white; }
+    button { margin: 10px; padding: 10px 20px; font-size: 16px; }
+    #scoreboard, #reference-table { margin-top: 20px; display: flex; justify-content: center; flex-wrap: wrap; }
+    .turn-entry { display: flex; flex-direction: column; align-items: center; margin: 5px; width: 70px; }
+    .turn-label { font-size: 12px; font-weight: bold; }
+    .turn-score { font-size: 18px; font-weight: bold; }
+    #turn-score-display { font-size: 20px; font-weight: bold; margin-top: 10px; }
+    #reset-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    #sidebar {
+      width: 300px;
+      background: #fff;
+      padding: 20px;
+      border-left: 2px solid #ccc;
+      box-shadow: -2px 0 5px rgba(0,0,0,0.1);
+      overflow-y: auto;
+      font-size: 14px;
+    }
+    #sidebar h2 { margin-top: 0; }
+    @media (max-width: 800px) {
+      body { flex-direction: column; }
+      #sidebar { width: 100%; border-left: none; border-top: 2px solid #ccc; }
+    }
+  </style>
+</head>
+<body>
+  <div id="main-container">
+    <h1>Locked and Rocked and Rolled</h1>
+    <div id="dice-container"></div>
+    <button onclick="rollDice()">Roll</button>
+    <button id="lock-btn" onclick="handleLock()">Lock</button>
+    <button id="reset-btn" onclick="nextOrReset()" disabled>Next Turn</button>
+    <h2 id="roll-count">Rolls: 0 / 3</h2>
+    <h2 id="turn-count">Turn: 1 / 10</h2>
+    <div id="turn-score-display">Turn Score: 0</div>
+    <div id="scoreboard"></div>
+    <h2 id="total-score">Total Score: 0</h2>
+  </div>
+
+  <div id="sidebar">
+    <h2>🌰 Game Rules</h2>
+    <p><strong>🎲 Game Summary</strong><br>
+    - 6 dice, up to 3 rolls per turn.<br>
+    - Lock dice to save values (can't unlock).<br>
+    - 10 turns per game.</p>
+
+    <p><strong>↺ Turn Flow</strong><br>
+    - Roll → Lock → (Optional more rolls) → Score → Next Turn.<br>
+    - Dice are scored only after final roll or all are locked.</p>
+
+    <p><strong>🧮 Scoring</strong><br>
+    - Single 1 = 10 points<br>
+    - Single 5 = 5 points<br>
+    - Three 1's = 100<br>
+    - Three 2's = 20<br>
+    - Three 3's = 30<br>
+    - Three 4's = 40<br>
+    - Three 5's = 50<br>
+    - Three 6's = 60<br>
+    - Four of a Kind = 100<br>
+    - Five of a Kind = 150<br>
+    - Six of a Kind = 200<br>
+    - Straight (1–6) = 150<br>
+    - Three Pairs = 150<br>
+    - Two Triplets = 250<br>
+    - No double-counting: combo dice are used first, if you have no combos your 1's and 5's are counted separately.</p>
+
+    <p><strong>🎯 Goal</strong><br>
+    - Score as high as possible in 10 turns.</p>
+  </div>
+
+  <script>
+    let dice = Array(6).fill().map(() => ({ value: 0, locked: false, selected: false, scored: false }));
+    let rollCount = 0;
+    let turn = 1;
+    let totalScore = 0;
+    let turnScores = Array(10).fill(null);
+
+    function renderDice() {
+      const container = document.getElementById('dice-container');
+      container.innerHTML = '';
+      dice.forEach((die, i) => {
+        let cls = 'die';
+        if (die.locked) cls += ' locked';
+        else if (die.selected) cls += ' selected';
+        if (die.scored) cls += ' scored';
+
+        const div = document.createElement('div');
+        div.className = cls;
+        div.textContent = die.value;
+        div.onclick = () => {
+          if (rollCount < 3 && !die.locked) {
+            die.selected = !die.selected;
+            renderDice();
+          }
+        };
+        container.appendChild(div);
+      });
+    }
+
+    function rollDice() {
+      if (rollCount >= 3 || turn > 10) return;
+      dice.forEach(die => {
+        if (!die.locked) {
+          die.value = Math.floor(Math.random() * 6) + 1;
+          die.selected = false;
+        }
+      });
+      rollCount++;
+      document.getElementById('roll-count').textContent = `Rolls: ${rollCount} / 3`;
+
+      const allLocked = dice.every(die => die.locked);
+      if (rollCount === 3 || allLocked) {
+        scoreDice();
+        document.getElementById('lock-btn').disabled = true;
+        document.getElementById('reset-btn').textContent = turn === 10 ? 'Reset Game' : 'Next Turn';
+        document.getElementById('reset-btn').disabled = false;
+      } else {
+        document.getElementById('reset-btn').disabled = true;
+      }
+
+      renderDice();
+    }
+
+    function handleLock() {
+      dice.forEach(die => {
+        if (die.selected) {
+          die.locked = true;
+          die.selected = false;
+        }
+      });
+      renderDice();
+    }
+
+    function scoreDice() {
+      dice.forEach(die => {
+        die.selected = false;
+        die.scored = false;
+      });
+
+      const { score, scoredIndexes } = calculateScore();
+      turnScores[turn - 1] = score;
+      totalScore = turnScores.reduce((a, b) => a + (b || 0), 0);
+      document.getElementById('turn-score-display').textContent = `Turn Score: ${score}`;
+      document.getElementById('total-score').textContent = `Total Score: ${totalScore}`;
+
+      scoredIndexes.forEach(index => dice[index].scored = true);
+
+      renderScoreboard();
+      renderDice();
+    }
+
+    function calculateScore() {
+      const counts = {};
+      dice.forEach(d => counts[d.value] = (counts[d.value] || 0) + 1);
+
+      const valueIndices = {};
+      dice.forEach((d, i) => {
+        if (!valueIndices[d.value]) valueIndices[d.value] = [];
+        valueIndices[d.value].push(i);
+      });
+
+      let score = 0;
+      let usedIndexes = new Set();
+
+      const values = dice.map(d => d.value).sort((a, b) => a - b).join('');
+      if (values === '123456') {
+        score += 150;
+        dice.forEach((_, i) => usedIndexes.add(i));
+        return { score, scoredIndexes: Array.from(usedIndexes) };
+      }
+
+      const countsArray = Object.values(counts);
+      const numPairs = countsArray.filter(v => v === 2).length;
+      const numTriplets = countsArray.filter(v => v === 3).length;
+
+      if (numTriplets === 2) {
+        score += 250;
+        for (let val in counts) {
+          if (counts[val] === 3) valueIndices[val].forEach(i => usedIndexes.add(i));
+        }
+        return { score, scoredIndexes: Array.from(usedIndexes) };
+      }
+
+      if (numPairs === 3) {
+        score += 150;
+        for (let val in counts) {
+          if (counts[val] === 2) valueIndices[val].forEach(i => usedIndexes.add(i));
+        }
+        return { score, scoredIndexes: Array.from(usedIndexes) };
+      }
+
+      for (let val = 1; val <= 6; val++) {
+        if (counts[val] === 6) {
+          score += 200;
+          valueIndices[val].forEach(i => usedIndexes.add(i));
+          return { score, scoredIndexes: Array.from(usedIndexes) };
+        }
+        if (counts[val] === 5) {
+          score += 150;
+          valueIndices[val].forEach(i => usedIndexes.add(i));
+          return { score, scoredIndexes: Array.from(usedIndexes) };
+        }
+        if (counts[val] === 4) {
+          score += 100;
+          valueIndices[val].forEach(i => usedIndexes.add(i));
+          return { score, scoredIndexes: Array.from(usedIndexes) };
+        }
+        if (counts[val] === 3) {
+          score += (val == 1) ? 100 : val * 10;
+          valueIndices[val].forEach(i => usedIndexes.add(i));
+          return { score, scoredIndexes: Array.from(usedIndexes) };
+        }
+      }
+
+      dice.forEach((die, i) => {
+        if (!usedIndexes.has(i)) {
+          if (die.value === 1) {
+            score += 10;
+            usedIndexes.add(i);
+          } else if (die.value === 5) {
+            score += 5;
+            usedIndexes.add(i);
+          }
+        }
+      });
+
+      return { score, scoredIndexes: Array.from(usedIndexes) };
+    }
+
+    function nextOrReset() {
+      if (turn === 10 && rollCount === 3) {
+        resetGame();
+        return;
+      }
+      turn++;
+      rollCount = 0;
+      dice = Array(6).fill().map(() => ({ value: 0, locked: false, selected: false, scored: false }));
+      document.getElementById('roll-count').textContent = 'Rolls: 0 / 3';
+      document.getElementById('turn-count').textContent = `Turn: ${turn} / 10`;
+      document.getElementById('turn-score-display').textContent = 'Turn Score: 0';
+      document.getElementById('lock-btn').disabled = false;
+      document.getElementById('reset-btn').textContent = 'Next Turn';
+      document.getElementById('reset-btn').disabled = true;
+      renderDice();
+    }
+
+    function renderScoreboard() {
+      const board = document.getElementById('scoreboard');
+      board.innerHTML = '';
+      turnScores.forEach((score, i) => {
+        const entry = document.createElement('div');
+        entry.className = 'turn-entry';
+        const label = document.createElement('div');
+        label.className = 'turn-label';
+        label.textContent = `Turn ${i + 1}`;
+        const value = document.createElement('div');
+        value.className = 'turn-score';
+        value.textContent = score !== null ? score : '-';
+        entry.appendChild(label);
+        entry.appendChild(value);
+        board.appendChild(entry);
+      });
+    }
+
+    function resetGame() {
+      dice = Array(6).fill().map(() => ({ value: 0, locked: false, selected: false, scored: false }));
+      rollCount = 0;
+      turn = 1;
+      totalScore = 0;
+      turnScores = Array(10).fill(null);
+      document.getElementById('roll-count').textContent = 'Rolls: 0 / 3';
+      document.getElementById('turn-count').textContent = 'Turn: 1 / 10';
+      document.getElementById('turn-score-display').textContent = 'Turn Score: 0';
+      document.getElementById('total-score').textContent = 'Total Score: 0';
+      document.getElementById('lock-btn').disabled = false;
+      document.getElementById('reset-btn').textContent = 'Next Turn';
+      document.getElementById('reset-btn').disabled = true;
+      renderDice();
+      renderScoreboard();
+    }
+
+    renderDice();
+    renderScoreboard();
+  </script>
+</body>
+</html>
